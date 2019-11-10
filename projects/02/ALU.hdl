@@ -42,5 +42,38 @@ CHIP ALU {
         ng; // 1 if (out < 0),  0 otherwise
 
     PARTS:
-   // Put you code here:
+        // Set x to zero if xz is true. Repeat with y and yz.
+        Mux16(a=x, b[0..15]=false, sel=zx, out=xAfterZeroing);
+        Mux16(a=y, b[0..15]=false, sel=zy, out=yAfterZeroing);
+
+        // Negate x if nx is true, otherwise don't change it.
+        Not16(in=xAfterZeroing, out=notXafterZeroing);
+        Mux16(a=xAfterZeroing,  b=notXafterZeroing, sel=nx, out=xAfterNegation);
+
+        // Negate y if ny is true, otherwise don't change it.
+        Not16(in=yAfterZeroing, out=notYafterZeroing);
+        Mux16(a=yAfterZeroing,  b=notYafterZeroing, sel=ny, out=yAfterNegation);
+
+        // Compute x + y if f is true, otherwise compute x & y.
+        Add16(a=xAfterNegation, b=yAfterNegation, out=aPlusB);
+        And16(a=xAfterNegation, b=yAfterNegation, out=aAndB);
+        Mux16(a=aAndB, b=aPlusB, sel=f, out=afterFunction);
+
+        // Negate the output if no is true, otherwise don't change it.
+        // Store it in result because we can't calculate zr and ng from the out pin.
+        Not16(in=afterFunction, out=notAfterFunction);
+        Mux16(a=afterFunction, b=notAfterFunction, sel=no, out=result);
+
+        // If result is 0, set zr to true, otherwise false.
+        // To save space we created an Or16To1 chip that returns true if any bit is true.
+        Or16To1(in=result, out=isNonZero);
+        Not(in=isNonZero, out=zr);
+
+        // If result < 0, set ng to true, otherwise false.
+        // Under two's complement the first bit (16th from right) is true if negative.
+        // Can't subscript internal pins so can't use And(a=result[15], b=true, out=ng).
+        And16(a=result, b[15]=true, out[15]=ng);
+
+        // Finally, pass the result to the out pin.
+        And16(a=result, b[0..15]=true, out=out);
 }
