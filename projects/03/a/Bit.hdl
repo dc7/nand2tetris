@@ -14,5 +14,11 @@ CHIP Bit {
     OUT out;
 
     PARTS:
-    // Put your code here:
+        // lastValue is the value that was stored in the DFF during the previous
+        // clock cycle and will be output this cycle.
+        // nextValue is the value that is being stored in the DFF this clock
+        // cycle and will be output next cycle.
+        Mux(a=lastValue, b=in, sel=load, out=nextValue);
+        DFF(in=nextValue, out=lastValue);
+        And(a=lastValue, b=true, out=out);
 }

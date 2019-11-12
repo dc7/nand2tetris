@@ -16,5 +16,23 @@ CHIP PC {
     OUT out[16];
 
     PARTS:
-    // Put your code here:
+        // Calculate the next value of the register. Flags have priority as
+        // noted in the function header so if reset=true and inc=true, the next
+        // value will be 0, not 1. Can be done in one step (see table).
+        //
+        // load    inc     reset   pin      meaning
+        // 0       0       0       a        use previous value
+        // 0       0       1       b        reset to 0
+        // 0       1       0       c        increment previous value
+        // 0       1       1       d        reset to 0
+        // 1       0       0       e        load value from input
+        // 1       0       1       f        reset to 0
+        // 1       1       0       g        load input (don't increment)
+        // 1       1       1       h        reset to 0
+        Mux8Way16(a=lastValue,  b[0..15]=false, c=lastPlusOne, d[0..15]=false,
+                  e=in,         f[0..15]=false, g=in,          h[0..15]=false,
+                  sel[0]=reset, sel[1]=inc,     sel[2]=load,   out=nextValue);
+        Register(in=nextValue, load=true, out=lastValue);
+        Inc16(in=lastValue, out=lastPlusOne);
+        And16(a=lastValue, b[0..15]=true, out=out);
 }
