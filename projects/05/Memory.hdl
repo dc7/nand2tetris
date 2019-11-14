@@ -27,5 +27,39 @@ CHIP Memory {
     OUT out[16];
 
     PARTS:
-    // Put your code here:
+        // Memory Layout
+        //     RAM16K
+        // 000000000000000 to
+        // 011111111111111
+        //     Screen
+        // 100000000000000 to
+        // 101111111111111
+        //     Keyboard
+        // 110000000000000
+
+        // 0...  = RAM
+        Not(in=address[14], out=selectRam);
+
+        // 10... = screen
+        Not(in=address[13], out=notAddress13);
+        And(a=address[14],  b=notAddress13, out=selectScreen);
+
+        // 11... = keyboard
+        And(a=address[14],  b=address[13],  out=selectKeyboard);
+
+        // Set the load flag for the selected device (keyboard has no input).
+        And(a=load, b=selectRam,    out=loadRam);
+        And(a=load, b=selectScreen, out=loadScreen);
+
+        // Load data to devices and get results.
+        RAM16K(in=in, load=loadRam,    address=address[0..13],
+               out=ramResult);
+        Screen(in=in, load=loadScreen, address=address[0..12],
+               out=screenResult);
+        Keyboard(out=keyboardResult);
+
+        // Output the desired result.
+        Mux8Way16(b=ramResult,      c=screenResult,      e=keyboardResult,
+                  sel[0]=selectRam, sel[1]=selectScreen, sel[2]=selectKeyboard,
+                  out=out);
 }

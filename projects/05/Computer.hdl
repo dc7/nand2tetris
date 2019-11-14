@@ -19,5 +19,9 @@ CHIP Computer {
     IN reset;
 
     PARTS:
-    // Put your code here:
+        // Define the computer. The ROM32K chip was provided for us.
+        CPU(inM=memoryOutput, instruction=instruction, reset=reset,
+            outM=memoryInput, writeM=writeM, addressM=addressM, pc=pc);
+        ROM32K(address=pc, out=instruction);
+        Memory(in=memoryInput, load=writeM, address=addressM, out=memoryOutput);
 }

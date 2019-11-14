@@ -39,5 +39,77 @@ CHIP CPU {
         pc[15];          // address of next instruction
 
     PARTS:
-    // Put your code here:
+        // Parse the instruction into flags. Bits 13 and 14 are unused.
+        And(a=true,           b=instruction[15], out=isCinstruction);
+        And(a=isCinstruction, b=instruction[12], out=computeWithM);       // a
+        And(a=isCinstruction, b=instruction[11], out=zeroX);              // c1
+        And(a=isCinstruction, b=instruction[10], out=negateX);            // c2
+        And(a=isCinstruction, b=instruction[9],  out=zeroY);              // c3
+        And(a=isCinstruction, b=instruction[8],  out=negateY);            // c4
+        And(a=isCinstruction, b=instruction[7],  out=addXandY);           // c5
+        And(a=isCinstruction, b=instruction[6],  out=negateAluOutput);    // c6
+        And(a=isCinstruction, b=instruction[5],  out=writeAluToA);        // d1
+        And(a=isCinstruction, b=instruction[4],  out=writeD);             // d2
+        And(a=isCinstruction, b=instruction[3],  out=internalWriteM);     // d3
+        And(a=isCinstruction, b=instruction[2],  out=selectNegativeJump); // j1
+        And(a=isCinstruction, b=instruction[1],  out=selectZeroJump);     // j2
+        And(a=isCinstruction, b=instruction[0],  out=selectPositiveJump); // j3
+
+        // Define register A. If this is an A-instruction, load the value of the
+        // instruction into A. Otherwise use the ALU output.
+        Not(in=isCinstruction, out=isAinstruction);
+        Or(a=isAinstruction,   b=writeAluToA, out=writeA);
+        Mux16(a=instruction,   b=aluOutput,   sel=isCinstruction,
+              out=aRegisterInput);
+        ARegister(in=aRegisterInput, load=writeA, out=aRegisterOutput);
+
+        // Define register D.
+        DRegister(in=aluOutput, load=writeD, out=dRegisterOutput);
+
+        // Define the ALU. When the a-bit (instruction[12]) is true, we'll
+        // compute the various ALU functions with M (i.e. M+1, D-M). Otherwise
+        // we'll compute them with A (A+1, D-A, etc).
+        Mux16(a=aRegisterOutput, b=inM, sel=computeWithM, out=aOrMOutput);
+        ALU(x=dRegisterOutput, y=aOrMOutput, zx=zeroX,   nx=negateX,
+            zy=zeroY,          ny=negateY,   f=addXandY, no=negateAluOutput,
+            out=aluOutput,     zr=aluIsZero, ng=aluIsNegative);
+
+        // Calculate the other properties of the alu output from the isZero and
+        // isNegative flags. This will be used to check for a jump. Negating
+        // aluIsNegative does not give aluIsPositive because the output might
+        // be zero.
+        Not(in=aluIsNegative,   out=aluIsNotNegative);
+        Not(in=aluIsZero,       out=aluIsNonZero);
+        And(a=aluIsNotNegative, b=aluIsNonZero, out=aluIsPositive);
+        Not(in=aluIsPositive,   out=aluIsNotPositive);
+
+        // Each combination of jump flags requires checking a different
+        // combination of ALU output flags to know whether or not to jump. Use a
+        // Mux to get the right combination (see table). We didn't define a
+        // 1-bit 8-way Mux so use the lowest bit of a 16-bit 8-way Mux.
+        //
+        // j1   j2   j3  label   mnemonic    meaning
+        // 0    0    0   a       null        never jump
+        // 0    0    1   b       JGT         jump if result > 0
+        // 0    1    0   c       JEQ         jump if result = 0
+        // 0    1    1   d       JGE         jump if result >= 0
+        // 1    0    0   e       JLT         jump if result < 0
+        // 1    0    1   f       JNE         jump if result != 0
+        // 1    1    0   g       JLE         jump if result <= 0
+        // 1    1    1   h       JMP         always jump
+        Mux8Way16(a[0]=false,            b[0]=aluIsPositive, c[0]=aluIsZero,
+                  d[0]=aluIsNotNegative, e[0]=aluIsNegative, f[0]=aluIsNonZero,
+                  g[0]=aluIsNotPositive, h[0]=true,          sel[2]=selectNegativeJump,
+                  sel[1]=selectZeroJump, sel[0]=selectPositiveJump, out[0]=jumpResult);
+
+        // Define the PC. If we're jumping, load the A register into the PC,
+        // otherwise increment the current value (PC handles the reset flag).
+        And(a=jumpResult, b=isCinstruction, out=writePC);
+        Not(in=writePC, out=incrementPC);
+        PC(in=aRegisterOutput, load=writePC, inc=incrementPC, reset=reset, out[0..14]=pc);
+
+        // Finally, send the M-values to the out pins.
+        Or16(a=aRegisterOutput, out[0..14]=addressM);
+        And(a=true, b=internalWriteM, out=writeM);
+        Mux16(b=aluOutput, sel=internalWriteM, out=outM);
 }
